@@ -9,10 +9,10 @@ A football analytics project combining Python for data work and modelling with C
 | `ratings/`    | Python        | Team attack and defence strengths from historical results (Poisson / Elo)     | PLANNED       |
 | `szn_sim/`    | C++           | Monte Carlo season simulator producing title, top-four and relegation odds    | PLANNED       |
 | `vzl/`        | Python        | Shot maps, pass networks, and probability charts                              | PLANNED       |
-
-**Model Shots** (`xg_model`): Estimate the probability that each shot becomes a goal from location, body part, context
-**Rate Teams** (`ratings`): Fit team strengths and export parameters
-**Simulate Seasons** (`szn_sim`): Read parameters from `ratings` in C++ and run 100K+ simulated seasons faster than Python
+  
+**Model Shots** (`xg_model`): Estimate the probability that each shot becomes a goal from location, body part, context  
+**Rate Teams** (`ratings`): Fit team strengths and export parameters  
+**Simulate Seasons** (`szn_sim`): Read parameters from `ratings` in C++ and run 100K+ simulated seasons faster than Python  
 **Visualize** (`vsl`): Plot results
 
 
