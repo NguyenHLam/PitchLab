@@ -12,7 +12,7 @@ A football analytics project combining Python for data work and modelling with C
   
 **Model Shots** (`xg_model`): Estimate the probability that each shot becomes a goal from location, body part, context  
 **Rate Teams** (`ratings`): Fit team strengths and export parameters  
-**Simulate Seasons** (`szn_sim`): Read parameters from `ratings` in C++ and run 100K+ simulated seasons faster than Python  
+**Simulate Seasons** (`szn_sim`): Read parameters from `ratings` in C++ and run 100K+ simulated seasons  
 **Visualize** (`vsl`): Plot results
 
 
