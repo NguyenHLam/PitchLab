@@ -1,41 +1,39 @@
-"""
-xG (Expected Goals) Model
-=====================================================
-
-OVERVIEW
------------------------------------------------------
-Expected goals (xG) is the probability that a given shot becomes a goal,
-estimated from the circumstances of the shot, such as where it was taken,
-with which body part, under pressure or not, etc. Summing xG over a player's
-or team's shots shows how many goals they 'should' have scored, which can be
-a better measure of chance quality than raw shot or goal counts.
-
-This script builds an xG model as a binary classification problem:
-    - Input: Features describing a single shot
-    - Target: `is_goal` (0 = NO GOAL, 1 = GOAL)
-    - Output: Calibrated probability between 0 and 1 for every shot
-
-The goal is not just to separate goals from misses, but to produce well-
-calibrated probabilities (shots given 0.20 xG should be scored roughly 20%
-of the time).
-
-
-DATA
------------------------------------------------------
-Source  :   StatsBomb Open Data, accessed through the `statesbombpy` package.
-Scope   :   At startup the script lists every competition/season available in 
-            the open data and asks user to pick one by number. Default if 2018
-            FIFA World Cup (43/3).
-Notes   :   Penalties are excluded due to being shot at a fixed distance
-            with no defenders.
-
-
-PITCH COORDINATES
------------------------------------------------------
-StatsBomb pitches are 120 x 80 units, and the attacking team always shoots
-towards x = 120. The goal center is at (120, 40) and the posts are at
-(120, 36) and (120, 44), meaning the goal mouth is 8 units wide.
-"""
+#  xG (Expected Goals) Model
+#  ==============================================================================
+#  
+#  OVERVIEW
+#  ------------------------------------------------------------------------------
+#  Expected goals (xG) is the probability that a given shot becomes a goal,
+#  estimated from the circumstances of the shot, such as where it was taken,
+#  with which body part, under pressure or not, etc. Summing xG over a player's
+#  or team's shots shows how many goals they 'should' have scored, which can be
+#  a better measure of chance quality than raw shot or goal counts.
+#  
+#  This script builds an xG model as a binary classification problem:
+#      - Input: Features describing a single shot
+#      - Target: `is_goal` (0 = NO GOAL, 1 = GOAL)
+#      - Output: Calibrated probability between 0 and 1 for every shot
+#  
+#  The goal is not just to separate goals from misses, but to produce well-
+#  calibrated probabilities (shots given 0.20 xG should be scored roughly 20%
+#  of the time).
+#  
+#  
+#  DATA
+#  ------------------------------------------------------------------------------
+#  Source  :   StatsBomb Open Data, accessed through the `statesbombpy` package.
+#  Scope   :   At startup the script lists every competition/season available in 
+#              the open data and asks user to pick one by number. Default is 2018
+#              FIFA World Cup (43/3).
+#  Notes   :   Penalties are excluded due to being shot at a fixed distance
+#              with no defenders.
+#  
+#  
+#  PITCH COORDINATES
+#  ------------------------------------------------------------------------------
+#  StatsBomb pitches are 120 x 80 units, and the attacking team always shoots
+#  towards x = 120. The goal center is at (120, 40) and the posts are at
+#  (120, 36) and (120, 44), meaning the goal mouth is 8 units wide.
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -53,9 +51,9 @@ from statsbombpy import sb
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning) 
 
-# -----------------------------------------------------
-# (1) CONFIGURATION
-# -----------------------------------------------------
+# -------------------------------------------------------------------------------
+#                                  CONFIGURATION
+# -------------------------------------------------------------------------------
 COMPETITION_ID = 43
 SEASON_ID = 3
 RANDOM_STATE = 42
@@ -66,11 +64,10 @@ POST_LEFT_Y = 36.0
 POST_RIGHT_Y = 44.0
 
 def choose_competiton() -> tuple[int, int]:
-    """
-    List every competition/season in the StatsBomb open data and let the user pick
+    """ List every competition/season in the StatsBomb open data and let the user pick
     one by number. Returns (competition_id, season_id). Pressing ENTER or running
-    without a terminal uses default (43, 3): FIFA World Cup 2018.
-    """
+    without a terminal uses default (43, 3): FIFA World Cup 2018. """
+
     comps = sb.competitions()[
         ["competition_id", "season_id", "competition_name", "season_name"]
     ]
@@ -107,13 +104,12 @@ def choose_competiton() -> tuple[int, int]:
         return (int(picked["competition_id"]), int(picked["season_id"]))
 
 
-# -----------------------------------------------------
-# (2) LOAD MATCHES AND SHOT EVENTS
-# -----------------------------------------------------
+# -------------------------------------------------------------------------------
+#                          LOAD MATCHES AND SHOT EVENTS
+# -------------------------------------------------------------------------------
 def load_shots(competition_id: int, season_id: int) -> pd.DataFrame:
-    """
-    Download all events for a competition/season and return only shots.
-    """
+    """ Download all events for a competition/season and return only shots. """
+
     matches = sb.matches(competition_id=competition_id, season_id=season_id)
     print(f"Found {len(matches)} matches. Please wait for events to download...")
 
@@ -127,15 +123,14 @@ def load_shots(competition_id: int, season_id: int) -> pd.DataFrame:
     return pd.concat(shot_frames, ignore_index=True)
 
 
-# -----------------------------------------------------
-# (3) CLEAN SHOTS
-# -----------------------------------------------------
+# -------------------------------------------------------------------------------
+#                                  CLEAN SHOTS
+# -------------------------------------------------------------------------------
 def clean_shots(shots: pd.DataFrame) -> pd.DataFrame:
-    """
-    Keep the columns we need, split the location into (x,y), create the binary
-    target `is_goal`, and drop penalty shots, which have different xG from open
-    play and are often modelled separately.
-    """
+    """ Keep the columns we need, split the location into (x,y), create the binary
+    target `is_goal`, and exclude penalty shots, which have different xG from open
+    play and are typically modelled separately. """
+
     df = shots.copy()
 
     df = df[df["shot_type"] != "Penalty"]
@@ -158,6 +153,36 @@ def clean_shots(shots: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# -------------------------------------------------------------------------------
+#                          FEATURE ENGINEERING: GEOMETRY
+# -------------------------------------------------------------------------------
+def add_distance(df: pd.DataFrame) -> pd.DataFrame:
+    """ Add a `goal_distance` column: Euclidean distance from the location of the 
+    shot to the goal center. """
+
+    df = df.copy()
+
+    df["goal_distance"] = np.hypot(GOAL_X - df["x"], GOAL_Y - df["y"])
+
+    return df
+
+
+def add_angle(df: pd.DataFrame) -> pd.DataFrame:
+    """ Add a `goal_angle` column: the visible angle of the goal mouth in radians 
+    from the shot (angle between the distances from the shot to the goal posts). """
+
+    df = df.copy()
+
+    left_distance = np.hypot(GOAL_X - df["x"], POST_LEFT_Y - df["y"])
+    right_distance = np.hypot(GOAL_X - df["x"], POST_RIGHT_Y - df["y"])
+    GOAL_MOUTH = POST_RIGHT_Y - POST_LEFT_Y
+
+    cos_angle = ((left_distance ** 2) + (right_distance ** 2) - (GOAL_MOUTH ** 2)) / (2 * left_distance * right_distance)
+    df["goal_angle"] = np.arccos(np.clip(cos_angle, -1, 1)).fillna(0)
+
+    return df
+
+
 # -----------------------------------------------------
 # MAIN PIPELINE
 # -----------------------------------------------------
@@ -165,8 +190,10 @@ def main() -> None:
     competition_id, season_id = choose_competiton()
     raw_shots = load_shots(competition_id, season_id)
     shots = clean_shots(raw_shots)
-    print(f"{len(shots)} open-play shots, goal rate = {shots['is_goal'].mean():.3f}")
+    print(f"{len(shots)} OPEN-PLAY SHOTS with GOAL RATE of {shots['is_goal'].mean():.3f}")
 
+    shots = add_distance(shots)
+    shots = add_angle(shots)
 
 if __name__ == "__main__":
     main()
